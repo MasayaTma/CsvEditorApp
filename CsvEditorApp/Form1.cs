@@ -9,55 +9,56 @@ namespace CsvEditorApp
 {
     public partial class Form1 : Form
     {
-        private List<string[]> csvData = new List<string[]>();  // CSVデータを保持するリスト
+        // CSVデータを保持するリスト
+        private List<string[]> csvData = new List<string[]>();
 
         public Form1()
         {
-            InitializeComponent();
+            InitializeComponent(); // WinForm の初期化
 
-            // DataGridViewの設定
-            dgvCsv.VirtualMode = true;
-            dgvCsv.CellValueNeeded += dgvCsv_CellValueNeeded;
-            dgvCsv.RowPostPaint += dgvCsv_RowPostPaint;  // メソッド名を正しく記述
-            dgvCsv.CellClick += dgvCsv_CellClick;
+            // DataGridView を仮想モードで動作させ、必要なイベントハンドラを登録
+            dgvCsv.VirtualMode = true;                     // 大量データでも高速表示
+            dgvCsv.CellValueNeeded += dgvCsv_CellValueNeeded; // セルの値を遅延供給
+            dgvCsv.RowPostPaint += dgvCsv_RowPostPaint;       // 行番号描画
+            dgvCsv.CellClick += dgvCsv_CellClick;             // セルクリック時の処理
         }
 
-        // フォームのLoadイベントハンドラを追加
+        // フォームロード時の初期化処理
         private void Form1_Load(object sender, EventArgs e)
         {
-            // 必要な初期化処理をここに記述します
-            // 例：フォントやスタイルの設定など
+            // DataGridView のフォント設定
             dgvCsv.DefaultCellStyle.Font = new Font("Consolas", 10);
         }
 
-        // CSVファイルを読み込むボタンのクリックイベント
+        // [CSV読み込み] ボタン押下時のイベント
         private async void btnLoadCsv_Click(object sender, EventArgs e)
         {
             // ファイル選択ダイアログを表示
-            OpenFileDialog openFileDialog = new OpenFileDialog();
-            openFileDialog.Filter = "CSVファイル (*.csv)|*.csv|すべてのファイル (*.*)|*.*";
-
-            if (openFileDialog.ShowDialog() == DialogResult.OK)
+            using (OpenFileDialog openFileDialog = new OpenFileDialog())
             {
-                string filePath = openFileDialog.FileName;
+                openFileDialog.Filter = "CSVファイル (*.csv)|*.csv|すべてのファイル (*.*)|*.*";
 
-                // 非同期でCSVデータを読み込み
-                await LoadCsvAsync(filePath);
+                if (openFileDialog.ShowDialog() == DialogResult.OK)
+                {
+                    string filePath = openFileDialog.FileName;
+                    // 非同期で CSV を読み込む
+                    await LoadCsvAsync(filePath);
+                }
             }
         }
 
-        // CSVデータを読み込むメソッド
+        // 非同期で CSV ファイルを読み込むメソッド
         private async Task LoadCsvAsync(string filePath)
         {
-            csvData.Clear();
+            csvData.Clear(); // 既存データをクリア
 
             using (var reader = new StreamReader(filePath))
             {
-                // ヘッダーを読み込み
+                // ヘッダー行を読み込む
                 string headerLine = await reader.ReadLineAsync();
                 string[] headers = headerLine.Split(',');
 
-                // DataGridViewの列設定
+                // UI スレッドで列ヘッダーを設定
                 Invoke(new Action(() =>
                 {
                     dgvCsv.ColumnCount = headers.Length;
@@ -67,23 +68,23 @@ namespace CsvEditorApp
                     }
                 }));
 
-                // データ行を読み込み
+                // データ行を 1 行ずつ読み込む
                 string line;
                 while ((line = await reader.ReadLineAsync()) != null)
                 {
                     string[] fields = line.Split(',');
-                    csvData.Add(fields);
+                    csvData.Add(fields); // リストに追加
                 }
             }
 
-            // 行数を設定
+            // UI スレッドで行数を設定
             Invoke(new Action(() =>
             {
                 dgvCsv.RowCount = csvData.Count;
             }));
         }
 
-        // DataGridViewの仮想モードでセルの値を提供
+        // 仮想モード時にセルの値を提供するイベント
         private void dgvCsv_CellValueNeeded(object sender, DataGridViewCellValueEventArgs e)
         {
             if (e.RowIndex >= 0 && e.RowIndex < csvData.Count)
@@ -91,37 +92,43 @@ namespace CsvEditorApp
                 string[] row = csvData[e.RowIndex];
                 if (e.ColumnIndex >= 0 && e.ColumnIndex < row.Length)
                 {
-                    e.Value = row[e.ColumnIndex];
+                    e.Value = row[e.ColumnIndex]; // セルに表示する値を設定
                 }
             }
         }
 
-        // 行番号を描画するイベントハンドラ
+        // 行番号を行ヘッダーに描画するイベント
         private void dgvCsv_RowPostPaint(object sender, DataGridViewRowPostPaintEventArgs e)
         {
-            // 行番号を計算
-            int rowNumber = e.RowIndex + 1;
+            int rowNumber = e.RowIndex + 1; // 行番号は 1 始まり
+            var rect = new Rectangle(
+                e.RowBounds.Left,
+                e.RowBounds.Top,
+                dgvCsv.RowHeadersWidth,
+                e.RowBounds.Height);
 
-            // 行ヘッダーの描画
-            var rect = new Rectangle(e.RowBounds.Left, e.RowBounds.Top, dgvCsv.RowHeadersWidth, e.RowBounds.Height);
-            TextRenderer.DrawText(e.Graphics, rowNumber.ToString(), dgvCsv.RowHeadersDefaultCellStyle.Font, rect, dgvCsv.RowHeadersDefaultCellStyle.ForeColor, TextFormatFlags.VerticalCenter | TextFormatFlags.Right);
+            // 行ヘッダー部分にテキスト描画
+            TextRenderer.DrawText(
+                e.Graphics,
+                rowNumber.ToString(),
+                dgvCsv.RowHeadersDefaultCellStyle.Font,
+                rect,
+                dgvCsv.RowHeadersDefaultCellStyle.ForeColor,
+                TextFormatFlags.VerticalCenter | TextFormatFlags.Right);
         }
 
-        // セルがクリックされたときに呼ばれるイベント
+        // セルクリック時に選択セルの値を TextBox に表示
         private void dgvCsv_CellClick(object sender, DataGridViewCellEventArgs e)
         {
-            // DataGridViewで選択されたセルがある場合
             if (e.RowIndex >= 0 && e.ColumnIndex >= 0)
             {
-                // 選択されたセルの内容をTextBoxに表示
                 txtEditor.Text = dgvCsv.Rows[e.RowIndex].Cells[e.ColumnIndex].Value?.ToString() ?? string.Empty;
             }
         }
 
-        // TextBoxの内容が変更されたときに呼ばれるイベント
+        // TextBox の内容が変わったときに CSV データも更新
         private void txtEditor_TextChanged(object sender, EventArgs e)
         {
-            // DataGridViewで選択されているセルがある場合
             if (dgvCsv.CurrentCell != null)
             {
                 int rowIndex = dgvCsv.CurrentCell.RowIndex;
@@ -129,6 +136,7 @@ namespace CsvEditorApp
 
                 if (rowIndex >= 0 && rowIndex < csvData.Count)
                 {
+                    // リスト内のデータを更新し、セルを再描画
                     csvData[rowIndex][colIndex] = txtEditor.Text;
                     dgvCsv.InvalidateCell(colIndex, rowIndex);
                 }
